@@ -3,10 +3,11 @@ TransitGuard AI - Computer Vision Pipeline
 Step 1+2+3: Read video frame-by-frame, run YOLOv8, track objects,
 and detect accident events (sudden overlap + sudden stop)
 """
-
+from severity import calculate_severity_score
 import cv2
 from ultralytics import YOLO
 from accident_detector import AccidentDetector
+from dispatcher_agent import dispatch_incident
 
 # Load pre-trained YOLOv8 model (downloads automatically first time, ~6MB)
 model = YOLO("yolov8n.pt")  # 'n' = nano, fastest version, good for hackathon
@@ -53,19 +54,37 @@ def process_video(video_path):
         if vehicles_in_frame:
             print(f"Frame {frame_num}: {len(vehicles_in_frame)} vehicles -> {vehicles_in_frame}")
 
-        # NEW: feed this frame's detections into the accident detector
+        # NEW: feed this frame's detections into the accident detector + severity calculation + printing
         events = detector.process_frame(frame_num, vehicles_in_frame)
         for e in events:
+            severity = calculate_severity_score(e)
+            e["severity"] = severity  # attach severity to the event
+            dispatch = dispatch_incident(
+                accident_type=e["type"],
+                severity_score=severity["score"],
+                severity_level=severity["level"],
+                timestamp=f"frame {e['frame']}",
+                location="Camera-01 / Main Road Junction",
+            )
+            e["dispatch"] = dispatch.model_dump()
+
             print(f"  >>> ACCIDENT EVENT at frame {e['frame']}: "
                   f"{e['objects'][0]} <-> {e['objects'][1]} "
                   f"(overlap={e['overlap']}, sudden_stop={e['sudden_stop']})")
+            print(f"      SEVERITY: {severity['score']}/100 -> {severity['level']}")
+            print(f"      Breakdown: {severity['breakdown']}")
+            print(f"      DISPATCH: {e['dispatch']}")
             all_events.append(e)
 
     cap.release()
     print(f"\nDone. Processed {frame_num} frames.")
     print(f"Total accident events detected: {len(all_events)}")
     for e in all_events:
-        print(f"  - Frame {e['frame']}: {e['type']} ({e['objects'][0]} <-> {e['objects'][1]})")
+        sev = e.get("severity", {})
+        dispatch = e.get("dispatch", {})
+        print(f"  - Frame {e['frame']}: {e['type']} ({e['objects'][0]} <-> {e['objects'][1]}) "
+              f"| Severity: {sev.get('score', 'N/A')}/100 -> {sev.get('level', 'N/A')} "
+              f"| Notify: {dispatch.get('notify', [])}")
 
 
 if __name__ == "__main__":
