@@ -1,4 +1,5 @@
 __pycache__/
 *.pyc
 yolov8n.pt
-mock_data/*.mp4
+**/mock_data/*.mp4
+tempCodeRunnerFile.py
