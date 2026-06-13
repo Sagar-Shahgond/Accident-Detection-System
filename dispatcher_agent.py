@@ -12,7 +12,7 @@ import os
 from typing import Literal
 
 from langchain.agents import create_agent
-from openai import OpenAIError
+
 from pydantic import BaseModel, Field
 
 
@@ -115,7 +115,7 @@ def build_dispatcher_agent(model: str | None = None):
     """Build the LangChain dispatcher agent using create_agent."""
 
     return create_agent(
-        model=model or os.getenv("TRANSITGUARD_MODEL", "openai:gpt-4.1-mini"),
+        model=model or os.getenv("TRANSITGUARD_MODEL", "groq:llama-3.1-8b-instant"),
         tools=[dispatch_policy],
         system_prompt=SYSTEM_PROMPT,
         response_format=DispatchResponse,
@@ -153,8 +153,8 @@ def dispatch_incident(
             }
         )
         return result["structured_response"]
-    except OpenAIError as exc:
-        print(f"OpenAI API unavailable, using local dispatcher fallback: {exc}")
+    except Exception as exc:
+        print(f"LLM unavailable, using local dispatcher fallback: {exc}")
         return dispatch_locally(
             accident_type=accident.accident_type,
             severity_score=accident.severity_score,
