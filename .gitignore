@@ -3,3 +3,4 @@ __pycache__/
 yolov8n.pt
 **/mock_data/*.mp4
 tempCodeRunnerFile.py
+.env

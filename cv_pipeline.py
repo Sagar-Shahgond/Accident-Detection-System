@@ -3,6 +3,7 @@ TransitGuard AI - Computer Vision Pipeline
 Step 1+2+3: Read video frame-by-frame, run YOLOv8, track objects,
 and detect accident events (sudden overlap + sudden stop)
 """
+import requests
 from severity import calculate_severity_score
 import cv2
 from ultralytics import YOLO
@@ -74,6 +75,24 @@ def process_video(video_path):
             print(f"      SEVERITY: {severity['score']}/100 -> {severity['level']}")
             print(f"      Breakdown: {severity['breakdown']}")
             print(f"      DISPATCH: {e['dispatch']}")
+
+            # Send this incident to the FastAPI backend -> Supabase
+            try:
+                response = requests.post("http://localhost:8000/incident", json={
+                    "camera_id": "CAM_001",
+                    "location": "Camera-01 / Main Road Junction",
+                    "frame_number": e["frame"],
+                    "accident_type": e["type"],
+                    "severity_score": severity["score"],
+                    "severity_level": severity["level"],
+                    "response_level": e["dispatch"]["response_level"],
+                    "notify": e["dispatch"]["notify"],
+                    "incident_summary": e["dispatch"]["incident_summary"],
+                })
+                print(f"      BACKEND: {response.json()}")
+            except Exception as ex:
+                print(f"      BACKEND ERROR: {ex}")
+
             all_events.append(e)
 
     cap.release()
