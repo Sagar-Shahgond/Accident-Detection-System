@@ -61,7 +61,8 @@ def dispatch_policy(
     timestamp: str,
     location: str,
 ) -> dict:
-    """Return the required emergency dispatch decision for an accident."""
+    """Return the required response_level and notify list for an accident.
+    Does NOT include incident_summary - the agent must write that itself."""
 
     response_level = normalize_severity_level(severity_level)
     notify = DISPATCH_RULES[response_level]
@@ -69,11 +70,6 @@ def dispatch_policy(
     return {
         "response_level": response_level,
         "notify": notify,
-        "incident_summary": (
-            f"{response_level} {accident_type} detected at {location} "
-            f"at {timestamp}. Severity score: {severity_score}/100. "
-            f"Notify: {', '.join(notify)}."
-        ),
     }
 
 
@@ -86,19 +82,31 @@ def dispatch_locally(
 ) -> DispatchResponse:
     """Return the dispatch decision without calling an LLM."""
 
-    return DispatchResponse(**dispatch_policy(
+    policy = dispatch_policy(
         accident_type=accident_type,
         severity_score=severity_score,
         severity_level=severity_level,
         timestamp=timestamp,
         location=location,
-    ))
+    )
+
+    return DispatchResponse(
+        response_level=policy["response_level"],
+        notify=policy["notify"],
+        incident_summary=(
+            f"{policy['response_level']} {accident_type} detected at {location} "
+            f"at {timestamp}. Severity score: {severity_score}/100. "
+            f"Notify: {', '.join(policy['notify'])}."
+        ),
+    )
 
 
 SYSTEM_PROMPT = """
-You are the TransitGuard AI Dispatcher Agent.
+You are the TransitGuard AI Dispatcher Agent - an autonomous emergency
+response coordinator analyzing live CCTV accident detections.
 
-Always use the dispatch_policy tool as the source of truth.
+Always use the dispatch_policy tool to determine response_level and notify list
+- this is the source of truth and must not be overridden.
 
 Dispatch rules:
 - LOW -> Traffic Control
@@ -107,6 +115,12 @@ Dispatch rules:
 - CRITICAL -> Police + Ambulance + Hospital
 
 If the severity level is MINOR, treat it as LOW.
+
+For the incident_summary field, write a brief (1-2 sentence) natural-language
+description of the situation as a human dispatcher would announce it over radio.
+Mention what type of accident occurred, its severity, and which responders are
+being notified and why. Be concise but make it sound like a real-time alert,
+not a robotic log entry.
 Return only structured JSON matching the DispatchResponse schema.
 """
 
